@@ -12,10 +12,10 @@ from temporalio.client import WorkflowUpdateFailedError
 from temporalio.exceptions import ApplicationError
 from temporalio.service import RPCError, RPCStatusCode
 
-from ..core.observability import bind_consultation_context
-from ..core.redis_client import redis_client
-from ..core.security import AuthContext, get_auth_context
-from ..core.temporal_client import TASK_QUEUE
+from ...core.observability import bind_consultation_context
+from ...core.redis_client import redis_client
+from ...core.security import AuthContext, get_auth_context
+from ...core.temporal_client import TASK_QUEUE
 from . import queries
 from .schemas import (
     ApproveResponse,

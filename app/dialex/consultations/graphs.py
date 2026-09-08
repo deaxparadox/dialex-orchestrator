@@ -12,7 +12,7 @@ from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel, Field, create_model
 from temporalio.common import RetryPolicy
 
-from ..core.observability import bind_consultation_context
+from ...core.observability import bind_consultation_context
 from .activities import _publish
 from .schemas import ConsultantCritique, ConsultantTurnOutput, ConsultantTurnOutputBase
 

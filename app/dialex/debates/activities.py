@@ -12,8 +12,8 @@ import logging
 
 from temporalio import activity
 
-from ..core.observability import bind_debate_context
-from ..core.redis_client import redis_client
+from ...core.observability import bind_debate_context
+from ...core.redis_client import redis_client
 from . import queries
 
 logger = logging.getLogger(__name__)

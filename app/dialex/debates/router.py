@@ -8,10 +8,10 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect, status
 
-from ..core.observability import bind_debate_context
-from ..core.redis_client import redis_client
-from ..core.security import AuthContext, decode_access_token, get_auth_context
-from ..core.temporal_client import TASK_QUEUE
+from ...core.observability import bind_debate_context
+from ...core.redis_client import redis_client
+from ...core.security import AuthContext, decode_access_token, get_auth_context
+from ...core.temporal_client import TASK_QUEUE
 from . import queries
 from .schemas import StartDebateResponse
 from .workflows import DebateWorkflow

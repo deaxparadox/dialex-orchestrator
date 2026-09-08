@@ -16,7 +16,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, StateGraph
 
-from ..core.observability import bind_debate_context
+from ...core.observability import bind_debate_context
 from .activities import _publish
 from .schemas import ArgumentJudgment, ClosingJudgment
 

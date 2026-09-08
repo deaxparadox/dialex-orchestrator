@@ -9,8 +9,8 @@ import logging
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
-from ..core.observability import bind_consultation_context
-from ..core.redis_client import redis_client
+from ...core.observability import bind_consultation_context
+from ...core.redis_client import redis_client
 from . import queries
 
 logger = logging.getLogger(__name__)

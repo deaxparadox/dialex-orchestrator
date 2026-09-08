@@ -9,14 +9,14 @@ from pathlib import Path
 from temporalio.contrib.langgraph import LangGraphPlugin
 from temporalio.worker import Worker
 
-from .consultations.activities import ALL_ACTIVITIES as CONSULTATION_ACTIVITIES
-from .consultations.graphs import CONSULTANT_GRAPH, build_consultant_graph
-from .consultations.workflows import ConsultationWorkflow
+from .dialex.consultations.activities import ALL_ACTIVITIES as CONSULTATION_ACTIVITIES
+from .dialex.consultations.graphs import CONSULTANT_GRAPH, build_consultant_graph
+from .dialex.consultations.workflows import ConsultationWorkflow
 from .core.db import engine
 from .core.observability import setup_observability
 from .core.temporal_client import TASK_QUEUE, get_temporal_client
-from .debates.activities import ALL_ACTIVITIES as DEBATE_ACTIVITIES
-from .debates.graphs import (
+from .dialex.debates.activities import ALL_ACTIVITIES as DEBATE_ACTIVITIES
+from .dialex.debates.graphs import (
     ARGUMENT_GRAPH,
     JUDGE_CLOSING_GRAPH,
     JUDGE_OPENING_GRAPH,
@@ -24,7 +24,7 @@ from .debates.graphs import (
     build_judge_closing_graph,
     build_judge_opening_graph,
 )
-from .debates.workflows import DebateWorkflow
+from .dialex.debates.workflows import DebateWorkflow
 
 
 async def main():

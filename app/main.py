@@ -12,8 +12,8 @@ from .core.generated_tables import t_accounts_user
 from .core.observability import bind_debate_context, setup_observability
 from .core.security import AuthContext, get_auth_context
 from .core.temporal_client import get_temporal_client
-from .consultations.router import router as consultations_router
-from .debates.router import router as debates_router
+from .dialex.consultations.router import router as consultations_router
+from .dialex.debates.router import router as debates_router
 
 setup_observability("dialex-orchestrator-api", Path(__file__).resolve().parent.parent / "logs" / "orchestrator.log", engine=engine)
 

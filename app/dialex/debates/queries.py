@@ -7,8 +7,8 @@ from datetime import date, datetime, timezone
 
 from sqlalchemy import insert, select, update
 
-from ..core.db import engine
-from ..core.generated_tables import (
+from ...core.db import engine
+from ...core.generated_tables import (
     t_cases_case,
     t_cases_casetypeconfig,
     t_debates_agentpersona,
