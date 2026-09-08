@@ -12,6 +12,7 @@ from .core.generated_tables import t_accounts_user
 from .core.observability import bind_debate_context, setup_observability
 from .core.security import AuthContext, get_auth_context
 from .core.temporal_client import get_temporal_client
+from .cofounder.chat.router import router as cofounder_chat_router
 from .dialex.consultations.router import router as consultations_router
 from .dialex.debates.router import router as debates_router
 
@@ -41,6 +42,7 @@ app.add_middleware(
 FastAPIInstrumentor.instrument_app(app)
 app.include_router(debates_router)
 app.include_router(consultations_router)
+app.include_router(cofounder_chat_router)
 
 
 @app.get("/health")

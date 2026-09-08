@@ -26,6 +26,7 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExport
 
 _debate_id_var = contextvars.ContextVar("dialex_debate_id", default=None)
 _consultation_session_id_var = contextvars.ContextVar("dialex_consultation_session_id", default=None)
+_cofounder_session_id_var = contextvars.ContextVar("dialex_cofounder_session_id", default=None)
 _session_id_var = contextvars.ContextVar("dialex_session_id", default=None)
 _user_id_var = contextvars.ContextVar("dialex_user_id", default=None)
 
@@ -33,6 +34,7 @@ _LOG_FORMAT = (
     "%(asctime)s %(levelname)s %(name)s "
     "trace_id=%(trace_id)s span_id=%(span_id)s "
     "debate_id=%(debate_id)s consultation_session_id=%(consultation_session_id)s "
+    "cofounder_session_id=%(cofounder_session_id)s "
     "session_id=%(session_id)s user_id=%(user_id)s "
     "%(message)s"
 )
@@ -54,6 +56,7 @@ class _DialexContextFilter(logging.Filter):
             record.span_id = None
         record.debate_id = _debate_id_var.get()
         record.consultation_session_id = _consultation_session_id_var.get()
+        record.cofounder_session_id = _cofounder_session_id_var.get()
         record.session_id = _session_id_var.get()
         record.user_id = _user_id_var.get()
         return True
@@ -81,6 +84,23 @@ def bind_consultation_context(consultation_session_id=None, session_id=None, use
     if consultation_session_id is not None:
         span.set_attribute("dialex.consultation_session_id", consultation_session_id)
         _consultation_session_id_var.set(consultation_session_id)
+    if session_id is not None:
+        span.set_attribute("dialex.session_id", session_id)
+        _session_id_var.set(session_id)
+    if user_id is not None:
+        span.set_attribute("dialex.user_id", user_id)
+        _user_id_var.set(user_id)
+
+
+def bind_cofounder_context(cofounder_session_id=None, session_id=None, user_id=None):
+    """Same shape as `bind_debate_context`/`bind_consultation_context`, for
+    the cofounder agent's own long-running workflow (spec 0044) — a
+    distinct field, since a cofounder chat session is neither a Debate nor
+    a Dialex ConsultationSession."""
+    span = trace.get_current_span()
+    if cofounder_session_id is not None:
+        span.set_attribute("dialex.cofounder_session_id", cofounder_session_id)
+        _cofounder_session_id_var.set(cofounder_session_id)
     if session_id is not None:
         span.set_attribute("dialex.session_id", session_id)
         _session_id_var.set(session_id)

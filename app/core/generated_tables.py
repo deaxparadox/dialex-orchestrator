@@ -121,6 +121,17 @@ t_cases_casetypeconfig = Table(
     Index('cases_casetypeconfig_type_5692f14e_like', 'type', postgresql_ops={'type': 'varchar_pattern_ops'})
 )
 
+t_cofounder_chat_cofoundersession = Table(
+    'cofounder_chat_cofoundersession', metadata,
+    Column('id', BigInteger, Identity(start=1, increment=1, minvalue=1, maxvalue=9223372036854775807, cycle=False, cache=1), primary_key=True, autoincrement=True),
+    Column('title', String(60), nullable=False),
+    Column('created_at', DateTime(True), nullable=False),
+    Column('user_id', BigInteger, nullable=False),
+    ForeignKeyConstraint(['user_id'], ['accounts_user.id'], deferrable=True, initially='DEFERRED', name='cofounder_chat_cofou_user_id_061bdece_fk_accounts_'),
+    PrimaryKeyConstraint('id', name='cofounder_chat_cofoundersession_pkey'),
+    Index('cofounder_chat_cofoundersession_user_id_061bdece', 'user_id')
+)
+
 t_consultations_consultationsession = Table(
     'consultations_consultationsession', metadata,
     Column('id', BigInteger, Identity(start=1, increment=1, minvalue=1, maxvalue=9223372036854775807, cycle=False, cache=1), primary_key=True, autoincrement=True),
@@ -224,6 +235,21 @@ t_cases_casetypeconfig_default_participant_personas = Table(
     UniqueConstraint('casetypeconfig_id', 'agentpersona_id', name='cases_casetypeconfig_def_casetypeconfig_id_agentp_15bf66de_uniq'),
     Index('cases_casetypeconfig_defau_agentpersona_id_ea3b76b2', 'agentpersona_id'),
     Index('cases_casetypeconfig_defau_casetypeconfig_id_5e001dce', 'casetypeconfig_id')
+)
+
+t_cofounder_chat_cofounderturn = Table(
+    'cofounder_chat_cofounderturn', metadata,
+    Column('id', BigInteger, Identity(start=1, increment=1, minvalue=1, maxvalue=9223372036854775807, cycle=False, cache=1), primary_key=True, autoincrement=True),
+    Column('turn_number', Integer, nullable=False),
+    Column('speaker', String(20), nullable=False),
+    Column('content', Text, nullable=False),
+    Column('created_at', DateTime(True), nullable=False),
+    Column('session_id', BigInteger, nullable=False),
+    CheckConstraint('turn_number >= 0', name='cofounder_chat_cofounderturn_turn_number_check'),
+    ForeignKeyConstraint(['session_id'], ['cofounder_chat_cofoundersession.id'], deferrable=True, initially='DEFERRED', name='cofounder_chat_cofou_session_id_be13ab57_fk_cofounder'),
+    PrimaryKeyConstraint('id', name='cofounder_chat_cofounderturn_pkey'),
+    UniqueConstraint('session_id', 'turn_number', name='cofounder_chat_cofounder_session_id_turn_number_407e985d_uniq'),
+    Index('cofounder_chat_cofounderturn_session_id_be13ab57', 'session_id')
 )
 
 t_consultations_consultationturn = Table(

@@ -9,6 +9,8 @@ from pathlib import Path
 from temporalio.contrib.langgraph import LangGraphPlugin
 from temporalio.worker import Worker
 
+from .cofounder.chat.activities import ALL_ACTIVITIES as COFOUNDER_CHAT_ACTIVITIES
+from .cofounder.chat.workflows import CofounderWorkflow
 from .dialex.consultations.activities import ALL_ACTIVITIES as CONSULTATION_ACTIVITIES
 from .dialex.consultations.graphs import CONSULTANT_GRAPH, build_consultant_graph
 from .dialex.consultations.workflows import ConsultationWorkflow
@@ -45,8 +47,8 @@ async def main():
     worker = Worker(
         client,
         task_queue=TASK_QUEUE,
-        workflows=[DebateWorkflow, ConsultationWorkflow],
-        activities=[*DEBATE_ACTIVITIES, *CONSULTATION_ACTIVITIES],
+        workflows=[DebateWorkflow, ConsultationWorkflow, CofounderWorkflow],
+        activities=[*DEBATE_ACTIVITIES, *CONSULTATION_ACTIVITIES, *COFOUNDER_CHAT_ACTIVITIES],
         plugins=[plugin],
     )
     await worker.run()
