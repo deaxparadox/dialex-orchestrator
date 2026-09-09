@@ -10,11 +10,17 @@ in the original (`entrepreneur_chat_node`, `entrepreneur_overview_agent`)
 are wired into the graph but never reachable from the router's conditional
 edges, dead code, not ported.
 
-Ideation (specs 0046/0047) is fully real too now — a create_react_agent
+Ideation (specs 0046/0047/0048) is fully real too now — a create_react_agent
 bound to 2 honest Bubble.io placeholders, a fully-ported market-research
-tool, and a Google Places lookup tool. Roadmap still needs Pinecone RAG —
-its own later spec, since every new external dependency needs its own
-approval."""
+tool, a Google Places lookup tool, and Pinecone RAG. Roadmap (spec 0048)
+is a basic version too now — a plain LLM call producing a trimmed
+structured roadmap, no per-step Pinecone resource enrichment yet
+(deferred to Phase 1f, along with the original's separate 31-file
+downloadable-template system). All 3 of the router's real destinations
+are now real — the `not_available` fallback from earlier phases is
+genuinely unreachable now and has been removed, matching the same
+"don't keep dead code" discipline already applied to the original's own
+unreachable nodes."""
 
 from datetime import timedelta
 from typing import Literal, TypedDict
@@ -33,6 +39,7 @@ from . import queries
 from .tools.bubble_placeholders import get_bubble_entreprenurs, get_bubble_freelancers_v2
 from .tools.google_places import search_place_and_rating_v2
 from .tools.market_research import market_research_tool
+from .tools.pinecone_rag import query_pinecone_tool
 
 COFOUNDER_GRAPH = "cofounder-graph"
 
@@ -43,6 +50,10 @@ _NODE_RETRY = RetryPolicy(initial_interval=timedelta(seconds=1), maximum_attempt
 # tools/market_research.py) — the 60s default is too tight for that
 # (spec 0046).
 _IDEATION_NODE_TIMEOUT = timedelta(seconds=180)
+# One LLM call, but a large structured JSON response (a full roadmap) —
+# more headroom than the 60s default, less than ideation's tool-calling
+# loop (spec 0048).
+_ROADMAP_NODE_TIMEOUT = timedelta(seconds=90)
 
 # Ported from ai/prompts/entrepreneur_router_prompt.py's routing rules —
 # only the JSON-schema-return instruction is dropped, since
@@ -116,7 +127,7 @@ async def _route_conditional(state: CofounderGraphState) -> str:
         return "image"
     if node == "entrepreneur_ideation_agent":
         return "ideation"
-    return "not_available"
+    return "roadmap"
 
 
 async def _image_generation_agent(state: CofounderGraphState) -> dict:
@@ -187,6 +198,7 @@ async def _ideation_agent(state: CofounderGraphState) -> dict:
             get_bubble_freelancers_v2,
             market_research_tool,
             search_place_and_rating_v2,
+            query_pinecone_tool,
         ],
     )
 
@@ -198,10 +210,101 @@ async def _ideation_agent(state: CofounderGraphState) -> dict:
     return {"reply": result["messages"][-1].content}
 
 
-async def _not_available(state: CofounderGraphState) -> dict:
-    return {
-        "reply": "I can't help with roadmap planning yet in this early version — that's coming in a later phase."
-    }
+# Trimmed from ai/prompts/entrepreneur_roadmap_prompt.py's cofounder_roadmap_prompt
+# (spec 0048). The original isn't a plain string — it's an async function
+# that also embeds a whole separate 31-file downloadable-template system
+# (services/template.yaml + media/templates/step-{1-7}/*) directly into the
+# prompt via string formatting. That system, plus the per-step Pinecone
+# resource-enrichment loop (enrich_roadmap_with_resources), is Phase 1f —
+# a real scope surprise discovered while investigating this phase, flagged
+# to the user directly. This keeps the original's idea_summary/roadmap/
+# execution_support/mentorship/events/funding schema, but note:
+# mentorship/events/funding were never grounded in any real data source
+# even in the original (no tool anywhere in this port queries a funding
+# database, mentor directory, or events calendar) — kept for schema
+# fidelity, not because there's a way to make them non-speculative yet.
+_ROADMAP_SYSTEM_PROMPT = """You are The Entrepreneur Lab Virtual Co-Founder, acting as a seasoned startup mentor and strategist.
+
+Generate a structured startup execution roadmap (MVP -> Launch -> Growth) for the user's idea, based on the conversation so far.
+
+- Populate idea_summary with a clear title, one-liner, key strengths, and major risks.
+- Generate a full, sequential, numbered roadmap (as many steps as genuinely needed, not padded).
+- Only include execution_support, mentorship, events, or funding sections if you have something genuinely useful to suggest — leave them empty rather than inventing plausible-sounding but fabricated specifics (e.g. don't invent a named event, a specific mentor's contact, or a funding source you're not confident is real).
+- Balance optimism with realism: include risks and constraints, not just upside."""
+
+
+class RoadmapStep(BaseModel):
+    step: int
+    title: str
+    description: str
+    objectives: list[str] = []
+
+
+class IdeaSummary(BaseModel):
+    title: str
+    one_liner: str
+    strengths: list[str] = []
+    risks: list[str] = []
+
+
+class SuggestedExpert(BaseModel):
+    name: str
+    expertise: str
+    contact: str | None = None
+
+
+class FundingOption(BaseModel):
+    type: str
+    name: str
+    stage_focus: str | None = None
+
+
+class RoadmapOutput(BaseModel):
+    idea_summary: IdeaSummary
+    roadmap: list[RoadmapStep]
+    suggested_experts: list[SuggestedExpert] = []
+    funding_options: list[FundingOption] = []
+
+
+def _format_roadmap_reply(roadmap: RoadmapOutput) -> str:
+    """This phase's frontend just renders whatever plain text comes back
+    (same minimal-rendering approach every phase has used so far) — no
+    rich roadmap UI yet, so the structured output is formatted into
+    readable text here rather than dumped as raw JSON."""
+    lines = [f"**{roadmap.idea_summary.title}** — {roadmap.idea_summary.one_liner}", ""]
+    if roadmap.idea_summary.strengths:
+        lines.append("Strengths: " + "; ".join(roadmap.idea_summary.strengths))
+    if roadmap.idea_summary.risks:
+        lines.append("Risks: " + "; ".join(roadmap.idea_summary.risks))
+    lines.append("")
+    lines.append("**Roadmap:**")
+    for step in roadmap.roadmap:
+        lines.append(f"{step.step}. {step.title} — {step.description}")
+        for objective in step.objectives:
+            lines.append(f"   - {objective}")
+    if roadmap.suggested_experts:
+        lines.append("")
+        lines.append("**Suggested experts:** " + "; ".join(f"{e.name} ({e.expertise})" for e in roadmap.suggested_experts))
+    if roadmap.funding_options:
+        lines.append("")
+        lines.append("**Funding options:** " + "; ".join(f"{f.name} ({f.type})" for f in roadmap.funding_options))
+    return "\n".join(lines)
+
+
+async def _roadmap_agent(state: CofounderGraphState) -> dict:
+    """Ported from ai/graphs/enterpreneur_graph.py's entrepreneur_roadmap_agent —
+    a plain LLM call, no tool-calling (the original doesn't bind any tools
+    to this node either; per-step Pinecone enrichment is a separate,
+    later graph step in the original, deferred to Phase 1f here)."""
+    bind_cofounder_context(cofounder_session_id=state["session_id"])
+    llm = ChatOpenAI(model="gpt-4o-mini", api_key=settings.openai_api_key)
+    roadmap: RoadmapOutput = await llm.with_structured_output(RoadmapOutput).ainvoke(
+        [
+            SystemMessage(_ROADMAP_SYSTEM_PROMPT),
+            HumanMessage(f"Conversation so far:\n{_transcript(state['turns'])}"),
+        ]
+    )
+    return {"reply": _format_roadmap_reply(roadmap)}
 
 
 def build_cofounder_graph() -> StateGraph:
@@ -212,17 +315,18 @@ def build_cofounder_graph() -> StateGraph:
         "retry_policy": _NODE_RETRY,
     }
     ideation_node_opts = {**node_opts, "start_to_close_timeout": _IDEATION_NODE_TIMEOUT}
+    roadmap_node_opts = {**node_opts, "start_to_close_timeout": _ROADMAP_NODE_TIMEOUT}
     g.add_node("route", _route, metadata=node_opts)
     g.add_node("image_generation_agent", _image_generation_agent, metadata=node_opts)
     g.add_node("ideation_agent", _ideation_agent, metadata=ideation_node_opts)
-    g.add_node("not_available", _not_available, metadata=node_opts)
+    g.add_node("roadmap_agent", _roadmap_agent, metadata=roadmap_node_opts)
     g.add_edge(START, "route")
     g.add_conditional_edges(
         "route",
         _route_conditional,
-        {"image": "image_generation_agent", "ideation": "ideation_agent", "not_available": "not_available"},
+        {"image": "image_generation_agent", "ideation": "ideation_agent", "roadmap": "roadmap_agent"},
     )
     g.add_edge("image_generation_agent", END)
     g.add_edge("ideation_agent", END)
-    g.add_edge("not_available", END)
+    g.add_edge("roadmap_agent", END)
     return g

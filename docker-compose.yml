@@ -16,6 +16,7 @@ services:
       REDIS_URL: redis://redis:6379/0
     volumes:
       - ./app:/app/app
+      - ./scripts:/app/scripts
     ports:
       # Host 8001 was already taken in the monorepo setup — kept at 8010
       # for consistency (container still listens on 8001 internally).
@@ -33,6 +34,7 @@ services:
       REDIS_URL: redis://redis:6379/0
     volumes:
       - ./app:/app/app
+      - ./scripts:/app/scripts
     # No host port — a Temporal Worker polls outbound for work, it never
     # accepts inbound connections (spec 0005).
     networks:
