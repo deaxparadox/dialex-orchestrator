@@ -1,9 +1,10 @@
 """Cofounder chat endpoints (spec 0044). Same ownership-check-before-Temporal
 shape as `dialex/consultations/router.py` — never fetch-then-check-after."""
 
+import base64
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from temporalio.service import RPCError, RPCStatusCode
 
 from ...core.observability import bind_cofounder_context
@@ -63,4 +64,17 @@ async def submit_message(
         if exc.status == RPCStatusCode.NOT_FOUND:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found") from exc
         raise
-    return SubmitMessageResponse(**result)
+    image_id = result.get("image_id")
+    image_url = f"/api/cofounder/images/{image_id}" if image_id is not None else None
+    return SubmitMessageResponse(reply=result["reply"], image_url=image_url)
+
+
+@router.get("/images/{image_id}")
+async def get_image(image_id: int, auth: AuthContext = Depends(get_auth_context)):
+    image = await queries.get_image(image_id)
+    if image is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found")
+    # Ownership resolved via the image's own session, same 404-not-403
+    # IDOR shape as everywhere else in this codebase.
+    await _get_owned_session(image["session_id"], auth)
+    return Response(content=base64.b64decode(image["data"]), media_type="image/png")

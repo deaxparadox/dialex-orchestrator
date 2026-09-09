@@ -10,6 +10,7 @@ from temporalio.contrib.langgraph import LangGraphPlugin
 from temporalio.worker import Worker
 
 from .cofounder.chat.activities import ALL_ACTIVITIES as COFOUNDER_CHAT_ACTIVITIES
+from .cofounder.chat.graphs import COFOUNDER_GRAPH, build_cofounder_graph
 from .cofounder.chat.workflows import CofounderWorkflow
 from .dialex.consultations.activities import ALL_ACTIVITIES as CONSULTATION_ACTIVITIES
 from .dialex.consultations.graphs import CONSULTANT_GRAPH, build_consultant_graph
@@ -42,6 +43,7 @@ async def main():
             JUDGE_OPENING_GRAPH: build_judge_opening_graph(),
             JUDGE_CLOSING_GRAPH: build_judge_closing_graph(),
             CONSULTANT_GRAPH: build_consultant_graph(),
+            COFOUNDER_GRAPH: build_cofounder_graph(),
         }
     )
     worker = Worker(

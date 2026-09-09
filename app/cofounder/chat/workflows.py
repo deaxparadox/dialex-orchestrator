@@ -5,6 +5,15 @@
 its WebSocket is a separate status tracker, not the content path — no
 WebSocket in this phase).
 
+The actual reply is now a real LangGraph graph (spec 0045) — router +
+image-generation path — run via `graph(COFOUNDER_GRAPH)`, the same
+mechanism `ConsultationWorkflow` uses for its own graph. `COFOUNDER_GRAPH`'s
+name string is redeclared here rather than imported from `graphs.py` —
+importing that module would pull langchain/langgraph/openai into the
+workflow's deterministic-execution path for no reason, same reasoning
+`dialex/consultations/workflows.py` already follows. Only `worker.py`
+needs the actual graph-builder function.
+
 Known, deliberate limitation: no terminal state — every session's workflow
 runs forever. Fine for proving the mechanism; revisit once there's a real
 reason to end a chat session."""
@@ -13,9 +22,12 @@ from datetime import timedelta
 
 from temporalio import workflow
 from temporalio.common import RetryPolicy
+from temporalio.contrib.langgraph import graph
 
 with workflow.unsafe.imports_passed_through():
     from . import activities
+
+COFOUNDER_GRAPH = "cofounder-graph"
 
 _ACTIVITY_TIMEOUT = timedelta(seconds=30)
 _ACTIVITY_RETRY = RetryPolicy(initial_interval=timedelta(seconds=1), maximum_attempts=3)
@@ -51,18 +63,17 @@ class CofounderWorkflow:
             retry_policy=_ACTIVITY_RETRY,
         )
 
-        reply = await workflow.execute_activity(
-            activities.generate_cofounder_reply,
-            args=[session_id, turns],
-            start_to_close_timeout=_ACTIVITY_TIMEOUT,
-            retry_policy=_ACTIVITY_RETRY,
+        result = await graph(COFOUNDER_GRAPH).compile().ainvoke(
+            {"session_id": session_id, "turns": turns, "router_response": None, "reply": None, "image_id": None}
         )
 
         self._turn_count += 1
         await workflow.execute_activity(
             activities.persist_cofounder_turn,
-            args=[session_id, self._turn_count, "agent", reply],
+            args=[session_id, self._turn_count, "agent", result["reply"]],
             start_to_close_timeout=_ACTIVITY_TIMEOUT,
             retry_policy=_ACTIVITY_RETRY,
         )
-        return {"reply": reply}
+        # image_id, not a URL — the Workflow/graph stay decoupled from HTTP
+        # routing concerns; router.py builds the actual served URL.
+        return {"reply": result["reply"], "image_id": result.get("image_id")}

@@ -11,3 +11,4 @@ class SubmitMessageRequest(BaseModel):
 
 class SubmitMessageResponse(BaseModel):
     reply: str
+    image_url: str | None = None

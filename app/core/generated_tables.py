@@ -237,6 +237,17 @@ t_cases_casetypeconfig_default_participant_personas = Table(
     Index('cases_casetypeconfig_defau_casetypeconfig_id_5e001dce', 'casetypeconfig_id')
 )
 
+t_cofounder_chat_cofoundergeneratedimage = Table(
+    'cofounder_chat_cofoundergeneratedimage', metadata,
+    Column('id', BigInteger, Identity(start=1, increment=1, minvalue=1, maxvalue=9223372036854775807, cycle=False, cache=1), primary_key=True, autoincrement=True),
+    Column('data', Text, nullable=False),
+    Column('created_at', DateTime(True), nullable=False),
+    Column('session_id', BigInteger, nullable=False),
+    ForeignKeyConstraint(['session_id'], ['cofounder_chat_cofoundersession.id'], deferrable=True, initially='DEFERRED', name='cofounder_chat_cofou_session_id_43825ae7_fk_cofounder'),
+    PrimaryKeyConstraint('id', name='cofounder_chat_cofoundergeneratedimage_pkey'),
+    Index('cofounder_chat_cofoundergeneratedimage_session_id_43825ae7', 'session_id')
+)
+
 t_cofounder_chat_cofounderturn = Table(
     'cofounder_chat_cofounderturn', metadata,
     Column('id', BigInteger, Identity(start=1, increment=1, minvalue=1, maxvalue=9223372036854775807, cycle=False, cache=1), primary_key=True, autoincrement=True),

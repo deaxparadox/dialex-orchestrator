@@ -6,7 +6,11 @@ from datetime import date, datetime, timezone
 from sqlalchemy import insert, select
 
 from ...core.db import engine
-from ...core.generated_tables import t_cofounder_chat_cofoundersession, t_cofounder_chat_cofounderturn
+from ...core.generated_tables import (
+    t_cofounder_chat_cofoundergeneratedimage,
+    t_cofounder_chat_cofoundersession,
+    t_cofounder_chat_cofounderturn,
+)
 
 
 def _serialize(row: dict) -> dict:
@@ -64,3 +68,29 @@ async def insert_turn(session_id: int, turn_number: int, speaker: str, content: 
             )
         )
         return result.inserted_primary_key[0]
+
+
+async def insert_image(session_id: int, data: str) -> int:
+    """Base64 image bytes — kept out of CofounderTurn.content entirely,
+    since that flows through Temporal's turn-history channel (spec 0045)."""
+    async with engine.begin() as conn:
+        result = await conn.execute(
+            insert(t_cofounder_chat_cofoundergeneratedimage).values(
+                session_id=session_id,
+                data=data,
+                created_at=datetime.now(timezone.utc),
+            )
+        )
+        return result.inserted_primary_key[0]
+
+
+async def get_image(image_id: int) -> dict | None:
+    async with engine.connect() as conn:
+        row = (
+            await conn.execute(
+                select(t_cofounder_chat_cofoundergeneratedimage).where(
+                    t_cofounder_chat_cofoundergeneratedimage.c.id == image_id
+                )
+            )
+        ).mappings().first()
+        return _serialize(dict(row)) if row else None
