@@ -10,17 +10,18 @@ in the original (`entrepreneur_chat_node`, `entrepreneur_overview_agent`)
 are wired into the graph but never reachable from the router's conditional
 edges, dead code, not ported.
 
-Only the image-generation path is fully real in this phase — ideation
-(needs DuckDuckGo/Google Places/Pinecone RAG) and roadmap (needs Pinecone
-RAG) are each their own later spec, since every new external dependency
-needs its own approval."""
+Ideation (spec 0046) is fully real too now — a create_react_agent bound to
+2 honest Bubble.io placeholders + a fully-ported market-research tool.
+Roadmap still needs Pinecone RAG — its own later spec, since every new
+external dependency needs its own approval."""
 
 from datetime import timedelta
 from typing import Literal, TypedDict
 
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, StateGraph
+from langgraph.prebuilt import create_react_agent
 from openai import AsyncOpenAI
 from pydantic import BaseModel
 from temporalio.common import RetryPolicy
@@ -28,11 +29,18 @@ from temporalio.common import RetryPolicy
 from ...core.config import settings
 from ...core.observability import bind_cofounder_context
 from . import queries
+from .tools.bubble_placeholders import get_bubble_entreprenurs, get_bubble_freelancers_v2
+from .tools.market_research import market_research_tool
 
 COFOUNDER_GRAPH = "cofounder-graph"
 
 _NODE_TIMEOUT = timedelta(seconds=60)
 _NODE_RETRY = RetryPolicy(initial_interval=timedelta(seconds=1), maximum_attempts=3)
+# The ideation node runs a real ReAct tool-calling loop (3 search queries +
+# concurrent page fetches with their own retry/backoff, per
+# tools/market_research.py) — the 60s default is too tight for that
+# (spec 0046).
+_IDEATION_NODE_TIMEOUT = timedelta(seconds=180)
 
 # Ported from ai/prompts/entrepreneur_router_prompt.py's routing rules —
 # only the JSON-schema-return instruction is dropped, since
@@ -102,7 +110,11 @@ async def _route_conditional(state: CofounderGraphState) -> str:
     # Temporal's workflow sandbox forbids spawning real OS threads (found
     # the hard way in dialex/consultations/graphs.py, spec 0009).
     node = state["router_response"]["recommended_node"]
-    return "image" if node == "image_generation_agent" else "not_available"
+    if node == "image_generation_agent":
+        return "image"
+    if node == "entrepreneur_ideation_agent":
+        return "ideation"
+    return "not_available"
 
 
 async def _image_generation_agent(state: CofounderGraphState) -> dict:
@@ -133,12 +145,54 @@ async def _image_generation_agent(state: CofounderGraphState) -> dict:
     return {"reply": "Here's what I generated:", "image_id": image_id}
 
 
+# Ported from ai/prompts/entrepreneur_ideation_prompt.py — the substantive
+# guidance is verbatim. Drops the original's "always wrap the answer in
+# {type, data} JSON" instruction: verified that envelope is consumed by
+# nothing downstream even in the original (the only parse attempt is a bare
+# try/except: pass that silently keeps the raw string on any failure), so
+# it carries no behavior — a deliberate, minor adaptation (spec 0046).
+_IDEATION_SYSTEM_PROMPT = """You are the Startup Ideation Agent — part of The Entrepreneur Lab Virtual Co-Founder system.
+
+Your job is to guide users through brainstorming, validating, and refining startup ideas.
+Act like an experienced founder, incubator mentor, and idea strategist.
+
+Core Instructions:
+- If the user seems unsure or their intent is unclear, ask clarifying questions before responding.
+- Encourage exploration: ask about the user's interests, skills, and the problems they see.
+- Validate startup ideas for market fit, problem clarity, and differentiation.
+- Respond in plain, conversational text — no JSON, no special formatting required.
+
+Additional Guidelines:
+- Keep tone collaborative, insightful, and curious.
+- Focus on helping the user think clearly and validate before building.
+- Do not generate roadmaps or 7-step plans — those belong to the Startup Roadmap Agent."""
+
+
+async def _ideation_agent(state: CofounderGraphState) -> dict:
+    """Ported from ai/graphs/enterpreneur_graph.py's entrepreneur_ideation_agent
+    + ai/llm/openai.py's ideation_llm_chat — a langgraph.prebuilt
+    create_react_agent bound to the 3 tools that exist right now (2 honest
+    Bubble.io placeholders + the fully-ported market research pipeline).
+    The react agent's entire multi-step tool-calling loop runs inside this
+    one call, matching the original's own granularity — no special handling
+    needed since this whole node already runs as one Temporal Activity."""
+    bind_cofounder_context(cofounder_session_id=state["session_id"])
+    llm = ChatOpenAI(model="gpt-4o-mini", api_key=settings.openai_api_key)
+    agent = create_react_agent(
+        llm, tools=[get_bubble_entreprenurs, get_bubble_freelancers_v2, market_research_tool]
+    )
+
+    messages = [SystemMessage(_IDEATION_SYSTEM_PROMPT)]
+    for turn in state["turns"]:
+        messages.append(HumanMessage(turn["content"]) if turn["speaker"] == "user" else AIMessage(turn["content"]))
+
+    result = await agent.ainvoke({"messages": messages})
+    return {"reply": result["messages"][-1].content}
+
+
 async def _not_available(state: CofounderGraphState) -> dict:
     return {
-        "reply": (
-            "I can only generate images so far in this early version — "
-            "ideation and roadmap planning are coming in a later phase."
-        )
+        "reply": "I can't help with roadmap planning yet in this early version — that's coming in a later phase."
     }
 
 
@@ -149,13 +203,18 @@ def build_cofounder_graph() -> StateGraph:
         "start_to_close_timeout": _NODE_TIMEOUT,
         "retry_policy": _NODE_RETRY,
     }
+    ideation_node_opts = {**node_opts, "start_to_close_timeout": _IDEATION_NODE_TIMEOUT}
     g.add_node("route", _route, metadata=node_opts)
     g.add_node("image_generation_agent", _image_generation_agent, metadata=node_opts)
+    g.add_node("ideation_agent", _ideation_agent, metadata=ideation_node_opts)
     g.add_node("not_available", _not_available, metadata=node_opts)
     g.add_edge(START, "route")
     g.add_conditional_edges(
-        "route", _route_conditional, {"image": "image_generation_agent", "not_available": "not_available"}
+        "route",
+        _route_conditional,
+        {"image": "image_generation_agent", "ideation": "ideation_agent", "not_available": "not_available"},
     )
     g.add_edge("image_generation_agent", END)
+    g.add_edge("ideation_agent", END)
     g.add_edge("not_available", END)
     return g
