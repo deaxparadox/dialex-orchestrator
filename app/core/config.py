@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     # during spec 0005 verification: booted fine with a blank key, then
     # failed deep inside an Activity instead of at startup).
     openai_api_key: str = Field(min_length=1)  # spec 0005 — LLM calls, never silently skipped
+    google_api_key: str = Field(min_length=1)  # spec 0047 — cofounder agent's Google Places tool
     temporal_address: str = Field(min_length=1)  # e.g. temporal:7233 inside compose
     redis_url: str = Field(min_length=1)  # spec 0013 — live debate streaming, e.g. redis://redis:6379/0
     # spec 0008 — the frontend dev server calls this API's endpoints directly

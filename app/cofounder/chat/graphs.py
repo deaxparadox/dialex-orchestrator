@@ -10,10 +10,11 @@ in the original (`entrepreneur_chat_node`, `entrepreneur_overview_agent`)
 are wired into the graph but never reachable from the router's conditional
 edges, dead code, not ported.
 
-Ideation (spec 0046) is fully real too now — a create_react_agent bound to
-2 honest Bubble.io placeholders + a fully-ported market-research tool.
-Roadmap still needs Pinecone RAG — its own later spec, since every new
-external dependency needs its own approval."""
+Ideation (specs 0046/0047) is fully real too now — a create_react_agent
+bound to 2 honest Bubble.io placeholders, a fully-ported market-research
+tool, and a Google Places lookup tool. Roadmap still needs Pinecone RAG —
+its own later spec, since every new external dependency needs its own
+approval."""
 
 from datetime import timedelta
 from typing import Literal, TypedDict
@@ -30,6 +31,7 @@ from ...core.config import settings
 from ...core.observability import bind_cofounder_context
 from . import queries
 from .tools.bubble_placeholders import get_bubble_entreprenurs, get_bubble_freelancers_v2
+from .tools.google_places import search_place_and_rating_v2
 from .tools.market_research import market_research_tool
 
 COFOUNDER_GRAPH = "cofounder-graph"
@@ -179,7 +181,13 @@ async def _ideation_agent(state: CofounderGraphState) -> dict:
     bind_cofounder_context(cofounder_session_id=state["session_id"])
     llm = ChatOpenAI(model="gpt-4o-mini", api_key=settings.openai_api_key)
     agent = create_react_agent(
-        llm, tools=[get_bubble_entreprenurs, get_bubble_freelancers_v2, market_research_tool]
+        llm,
+        tools=[
+            get_bubble_entreprenurs,
+            get_bubble_freelancers_v2,
+            market_research_tool,
+            search_place_and_rating_v2,
+        ],
     )
 
     messages = [SystemMessage(_IDEATION_SYSTEM_PROMPT)]
