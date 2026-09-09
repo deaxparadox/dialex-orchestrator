@@ -11,9 +11,11 @@ from . import queries
 
 
 @activity.defn
-async def persist_cofounder_turn(session_id: int, turn_number: int, speaker: str, content: str) -> int:
+async def persist_cofounder_turn(
+    session_id: int, turn_number: int, speaker: str, content: str, step: int | None = None
+) -> int:
     bind_cofounder_context(cofounder_session_id=session_id)
-    return await queries.insert_turn(session_id, turn_number, speaker, content)
+    return await queries.insert_turn(session_id, turn_number, speaker, content, step)
 
 
 @activity.defn

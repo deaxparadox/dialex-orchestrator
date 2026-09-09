@@ -56,7 +56,9 @@ async def get_turns(session_id: int) -> list[dict]:
         return [_serialize(dict(row)) for row in rows]
 
 
-async def insert_turn(session_id: int, turn_number: int, speaker: str, content: str) -> int:
+async def insert_turn(
+    session_id: int, turn_number: int, speaker: str, content: str, step: int | None = None
+) -> int:
     async with engine.begin() as conn:
         result = await conn.execute(
             insert(t_cofounder_chat_cofounderturn).values(
@@ -64,6 +66,7 @@ async def insert_turn(session_id: int, turn_number: int, speaker: str, content: 
                 turn_number=turn_number,
                 speaker=speaker,
                 content=content,
+                step=step,
                 created_at=datetime.now(timezone.utc),
             )
         )

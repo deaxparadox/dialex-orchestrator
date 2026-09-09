@@ -28,6 +28,7 @@ with workflow.unsafe.imports_passed_through():
     from . import activities
 
 COFOUNDER_GRAPH = "cofounder-graph"
+COFOUNDER_STRUCTURED_GRAPH = "cofounder-structured-graph"
 
 _ACTIVITY_TIMEOUT = timedelta(seconds=30)
 _ACTIVITY_RETRY = RetryPolicy(initial_interval=timedelta(seconds=1), maximum_attempts=3)
@@ -77,3 +78,40 @@ class CofounderWorkflow:
         # image_id, not a URL — the Workflow/graph stay decoupled from HTTP
         # routing concerns; router.py builds the actual served URL.
         return {"reply": result["reply"], "image_id": result.get("image_id")}
+
+    @workflow.update
+    async def submit_structured_message(self, session_id: int, text: str, step: int) -> dict:
+        """Same persist-then-fetch-then-invoke-then-persist shape as
+        submit_message, but runs `structured_graph` (spec 0049) and tags
+        both turns with `step` — the original's second, client-driven
+        endpoint (`ai/views/structured_agent.py`), reusing this same
+        session/workflow rather than a separate one (see spec 0049's
+        persistence design: one turn history, structured and free-form
+        turns told apart only by the `step` column)."""
+        self._turn_count += 1
+        await workflow.execute_activity(
+            activities.persist_cofounder_turn,
+            args=[session_id, self._turn_count, "user", text, step],
+            start_to_close_timeout=_ACTIVITY_TIMEOUT,
+            retry_policy=_ACTIVITY_RETRY,
+        )
+
+        turns = await workflow.execute_activity(
+            activities.fetch_cofounder_turns,
+            session_id,
+            start_to_close_timeout=_ACTIVITY_TIMEOUT,
+            retry_policy=_ACTIVITY_RETRY,
+        )
+
+        result = await graph(COFOUNDER_STRUCTURED_GRAPH).compile().ainvoke(
+            {"session_id": session_id, "turns": turns, "step": step, "reply": None}
+        )
+
+        self._turn_count += 1
+        await workflow.execute_activity(
+            activities.persist_cofounder_turn,
+            args=[session_id, self._turn_count, "agent", result["reply"], step],
+            start_to_close_timeout=_ACTIVITY_TIMEOUT,
+            retry_policy=_ACTIVITY_RETRY,
+        )
+        return {"reply": result["reply"]}

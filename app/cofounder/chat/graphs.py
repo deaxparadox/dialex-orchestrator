@@ -15,12 +15,18 @@ bound to 2 honest Bubble.io placeholders, a fully-ported market-research
 tool, a Google Places lookup tool, and Pinecone RAG. Roadmap (spec 0048)
 is a basic version too now — a plain LLM call producing a trimmed
 structured roadmap, no per-step Pinecone resource enrichment yet
-(deferred to Phase 1f, along with the original's separate 31-file
+(deferred to Phase 1g, along with the original's separate 31-file
 downloadable-template system). All 3 of the router's real destinations
 are now real — the `not_available` fallback from earlier phases is
 genuinely unreachable now and has been removed, matching the same
 "don't keep dead code" discipline already applied to the original's own
-unreachable nodes."""
+unreachable nodes.
+
+`build_ideation_agent` (spec 0049) is factored out of `_ideation_agent`
+below because `structured_graph.py`'s 7 step nodes now need the exact
+same react-agent construction too — the original reuses one shared
+`ideation_llm_chat` instance across both its free-form and structured
+graphs the same way."""
 
 from datetime import timedelta
 from typing import Literal, TypedDict
@@ -181,17 +187,14 @@ Additional Guidelines:
 - Do not generate roadmaps or 7-step plans — those belong to the Startup Roadmap Agent."""
 
 
-async def _ideation_agent(state: CofounderGraphState) -> dict:
-    """Ported from ai/graphs/enterpreneur_graph.py's entrepreneur_ideation_agent
-    + ai/llm/openai.py's ideation_llm_chat — a langgraph.prebuilt
-    create_react_agent bound to the 3 tools that exist right now (2 honest
-    Bubble.io placeholders + the fully-ported market research pipeline).
-    The react agent's entire multi-step tool-calling loop runs inside this
-    one call, matching the original's own granularity — no special handling
-    needed since this whole node already runs as one Temporal Activity."""
-    bind_cofounder_context(cofounder_session_id=state["session_id"])
+def build_ideation_agent():
+    """The shared `ideation_llm_chat` react-agent construction (ported from
+    ai/llm/openai.py) — used by `_ideation_agent` below and, since spec
+    0049, by every `entrepreneur_structured_graph` step node too (the
+    original reuses this exact same agent instance across both graphs,
+    only swapping the system prompt per call)."""
     llm = ChatOpenAI(model="gpt-4o-mini", api_key=settings.openai_api_key)
-    agent = create_react_agent(
+    return create_react_agent(
         llm,
         tools=[
             get_bubble_entreprenurs,
@@ -201,6 +204,18 @@ async def _ideation_agent(state: CofounderGraphState) -> dict:
             query_pinecone_tool,
         ],
     )
+
+
+async def _ideation_agent(state: CofounderGraphState) -> dict:
+    """Ported from ai/graphs/enterpreneur_graph.py's entrepreneur_ideation_agent
+    + ai/llm/openai.py's ideation_llm_chat — a langgraph.prebuilt
+    create_react_agent bound to the 3 tools that exist right now (2 honest
+    Bubble.io placeholders + the fully-ported market research pipeline).
+    The react agent's entire multi-step tool-calling loop runs inside this
+    one call, matching the original's own granularity — no special handling
+    needed since this whole node already runs as one Temporal Activity."""
+    bind_cofounder_context(cofounder_session_id=state["session_id"])
+    agent = build_ideation_agent()
 
     messages = [SystemMessage(_IDEATION_SYSTEM_PROMPT)]
     for turn in state["turns"]:
@@ -215,7 +230,7 @@ async def _ideation_agent(state: CofounderGraphState) -> dict:
 # that also embeds a whole separate 31-file downloadable-template system
 # (services/template.yaml + media/templates/step-{1-7}/*) directly into the
 # prompt via string formatting. That system, plus the per-step Pinecone
-# resource-enrichment loop (enrich_roadmap_with_resources), is Phase 1f —
+# resource-enrichment loop (enrich_roadmap_with_resources), is Phase 1g —
 # a real scope surprise discovered while investigating this phase, flagged
 # to the user directly. This keeps the original's idea_summary/roadmap/
 # execution_support/mentorship/events/funding schema, but note:
@@ -295,7 +310,7 @@ async def _roadmap_agent(state: CofounderGraphState) -> dict:
     """Ported from ai/graphs/enterpreneur_graph.py's entrepreneur_roadmap_agent —
     a plain LLM call, no tool-calling (the original doesn't bind any tools
     to this node either; per-step Pinecone enrichment is a separate,
-    later graph step in the original, deferred to Phase 1f here)."""
+    later graph step in the original, deferred to Phase 1g here)."""
     bind_cofounder_context(cofounder_session_id=state["session_id"])
     llm = ChatOpenAI(model="gpt-4o-mini", api_key=settings.openai_api_key)
     roadmap: RoadmapOutput = await llm.with_structured_output(RoadmapOutput).ainvoke(

@@ -11,6 +11,7 @@ from temporalio.worker import Worker
 
 from .cofounder.chat.activities import ALL_ACTIVITIES as COFOUNDER_CHAT_ACTIVITIES
 from .cofounder.chat.graphs import COFOUNDER_GRAPH, build_cofounder_graph
+from .cofounder.chat.structured_graph import COFOUNDER_STRUCTURED_GRAPH, build_structured_graph
 from .cofounder.chat.workflows import CofounderWorkflow
 from .dialex.consultations.activities import ALL_ACTIVITIES as CONSULTATION_ACTIVITIES
 from .dialex.consultations.graphs import CONSULTANT_GRAPH, build_consultant_graph
@@ -44,6 +45,7 @@ async def main():
             JUDGE_CLOSING_GRAPH: build_judge_closing_graph(),
             CONSULTANT_GRAPH: build_consultant_graph(),
             COFOUNDER_GRAPH: build_cofounder_graph(),
+            COFOUNDER_STRUCTURED_GRAPH: build_structured_graph(),
         }
     )
     worker = Worker(

@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class StartSessionResponse(BaseModel):
@@ -12,3 +12,12 @@ class SubmitMessageRequest(BaseModel):
 class SubmitMessageResponse(BaseModel):
     reply: str
     image_url: str | None = None
+
+
+class SubmitStructuredMessageRequest(BaseModel):
+    text: str
+    step: int = Field(ge=1, le=7)
+
+
+class SubmitStructuredMessageResponse(BaseModel):
+    reply: str

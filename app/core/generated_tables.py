@@ -256,6 +256,8 @@ t_cofounder_chat_cofounderturn = Table(
     Column('content', Text, nullable=False),
     Column('created_at', DateTime(True), nullable=False),
     Column('session_id', BigInteger, nullable=False),
+    Column('step', SmallInteger),
+    CheckConstraint('step >= 0', name='cofounder_chat_cofounderturn_step_check'),
     CheckConstraint('turn_number >= 0', name='cofounder_chat_cofounderturn_turn_number_check'),
     ForeignKeyConstraint(['session_id'], ['cofounder_chat_cofoundersession.id'], deferrable=True, initially='DEFERRED', name='cofounder_chat_cofou_session_id_be13ab57_fk_cofounder'),
     PrimaryKeyConstraint('id', name='cofounder_chat_cofounderturn_pkey'),

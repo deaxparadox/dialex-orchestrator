@@ -11,7 +11,13 @@ from ...core.observability import bind_cofounder_context
 from ...core.security import AuthContext, get_auth_context
 from ...core.temporal_client import TASK_QUEUE
 from . import queries
-from .schemas import StartSessionResponse, SubmitMessageRequest, SubmitMessageResponse
+from .schemas import (
+    StartSessionResponse,
+    SubmitMessageRequest,
+    SubmitMessageResponse,
+    SubmitStructuredMessageRequest,
+    SubmitStructuredMessageResponse,
+)
 from .workflows import CofounderWorkflow
 
 logger = logging.getLogger(__name__)
@@ -67,6 +73,34 @@ async def submit_message(
     image_id = result.get("image_id")
     image_url = f"/api/cofounder/images/{image_id}" if image_id is not None else None
     return SubmitMessageResponse(reply=result["reply"], image_url=image_url)
+
+
+@router.post("/sessions/{session_id}/structured-messages", response_model=SubmitStructuredMessageResponse)
+async def submit_structured_message(
+    session_id: int,
+    body: SubmitStructuredMessageRequest,
+    request: Request,
+    auth: AuthContext = Depends(get_auth_context),
+):
+    """The original's second, client-driven endpoint (spec 0049) — same
+    ownership-check-before-Temporal shape, reuses the same session/workflow
+    as submit_message rather than a separate one."""
+    bind_cofounder_context(
+        cofounder_session_id=session_id, session_id=auth.session_id, user_id=auth.user_id
+    )
+    await _get_owned_session(session_id, auth)
+
+    client = request.app.state.temporal_client
+    handle = client.get_workflow_handle(f"cofounder-{session_id}")
+    try:
+        result = await handle.execute_update(
+            CofounderWorkflow.submit_structured_message, args=[session_id, body.text, body.step]
+        )
+    except RPCError as exc:
+        if exc.status == RPCStatusCode.NOT_FOUND:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found") from exc
+        raise
+    return SubmitStructuredMessageResponse(reply=result["reply"])
 
 
 @router.get("/images/{image_id}")
